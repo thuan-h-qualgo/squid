@@ -10,6 +10,7 @@
 #define SQUID_INCLUDE_SPLAY_H
 
 #include "fatal.h"
+#include <cassert>
 #include <cstddef>
 #include <stack>
 
@@ -67,6 +68,13 @@ public:
 
     void remove(Value const &, SPLAYCMP *compare);
 
+    /// Stores the given values in an empty tree, in O(n) time. The values must
+    /// be unique and sorted in the ascending order of the comparison function
+    /// that will be used to search this tree. Building a balanced tree from
+    /// sorted values is much faster than inserting them one by one: Every
+    /// insert() splays the tree, comparing values O(log n) times.
+    template <class Values> void assignSorted(const Values &);
+
     void destroy(SPLAYFREE * = DefaultFree);
 
     SplayNode<V> const * start() const;
@@ -87,6 +95,9 @@ public:
 private:
     /// left-to-right walk through all nodes
     template <typename NodeVisitor> void visitEach(NodeVisitor &) const;
+
+    /// a balanced subtree holding sorted values in the [begin, end) range
+    template <class Values> static SplayNode<V> *BuildBalanced(const Values &, size_t begin, size_t end);
 
     mutable SplayNode<V> * head;
     size_t elements;
@@ -342,6 +353,31 @@ Splay<V>::remove(Value const &value, SPLAYCMP *compare)
     head = head->remove(value, compare);
 
     --elements;
+}
+
+template <class V>
+template <class Values>
+void
+Splay<V>::assignSorted(const Values &values)
+{
+    assert(!head);
+    head = BuildBalanced(values, 0, values.size());
+    elements = values.size();
+}
+
+template <class V>
+template <class Values>
+SplayNode<V> *
+Splay<V>::BuildBalanced(const Values &values, const size_t begin, const size_t end)
+{
+    if (begin >= end)
+        return nullptr;
+
+    const auto middle = begin + (end - begin)/2;
+    const auto node = new SplayNode<V>(values[middle]);
+    node->left = BuildBalanced(values, begin, middle);
+    node->right = BuildBalanced(values, middle + 1, end);
+    return node;
 }
 
 template <class V>
