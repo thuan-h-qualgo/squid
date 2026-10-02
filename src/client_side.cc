@@ -164,7 +164,18 @@ public:
     }
 
     virtual bool canDial(AsyncCall &) const { return true; }
-    virtual void dial(AsyncCall &) { (handler)(portCfg, portTypeNote, sub); }
+    virtual void dial(AsyncCall &) {
+        if (portCfg->listenConn != answer_.conn) {
+            // A reconfiguration closed this port while we were waiting for its
+            // listening socket. Counting this stale answer as a failure to open
+            // the port would kill a worker that is opening the new ports.
+            debugs(1, 2, "ignoring a listening socket for a closed " << FdNote(portTypeNote) << ": " << answer_.conn);
+            if (Comm::IsConnOpen(answer_.conn))
+                answer_.conn->close();
+            return;
+        }
+        (handler)(portCfg, portTypeNote, sub);
+    }
 
     /* WithAnswer API */
     Ipc::StartListeningAnswer &answer() override { return answer_; }
